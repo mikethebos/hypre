@@ -1418,6 +1418,116 @@ hypre_MPI_Waitany( HYPRE_Int          count,
    return ierr;
 }
 
+#define RADIX 4
+#define TAG 9243
+
+int high_radix_allreduce(const void* sendbuf,
+                        void* recvbuf,
+                        int count,
+                        MPI_Datatype datatype,
+                        MPI_Op op,
+                        MPI_Comm comm)
+{
+    int type_size;
+    MPI_Type_size(datatype, &type_size);
+
+    int rank, num_procs;
+    MPI_Comm_rank(comm, &rank);
+    MPI_Comm_size(comm, &num_procs);
+
+    int tag = TAG;
+
+    // Send `sendbuf` into `recvbuf` (Sendrecv to work on CPU or GPU)
+    MPI_Sendrecv(sendbuf, count, datatype, rank, tag, 
+            recvbuf, count, datatype, rank, tag, comm,
+            MPI_STATUS_IGNORE);
+
+    int pow_radix_num_procs = 1;
+    while (pow_radix_num_procs * RADIX <= num_procs)
+        pow_radix_num_procs *= RADIX;
+    int mult = num_procs / pow_radix_num_procs;
+    int max_proc = mult * pow_radix_num_procs;
+    int extra = num_procs - max_proc;
+
+    MPI_Request* request = (MPI_Request*)malloc(2*RADIX*sizeof(MPI_Request));
+
+    // gpuMallocHost too expensive, just use malloc
+    char *tmpbuf = (char*)malloc(RADIX*type_size*count);
+
+    if (rank >= max_proc)
+    {
+        int proc = rank - max_proc;
+        MPI_Send(recvbuf, count, datatype, proc, tag, comm);
+        MPI_Recv(recvbuf, count, datatype, proc, tag, comm, 
+                MPI_STATUS_IGNORE);
+    }
+    else
+    {
+        if (rank < extra)
+        {
+            MPI_Recv(tmpbuf, count, datatype, max_proc + rank, tag,
+                   comm, MPI_STATUS_IGNORE);
+            MPI_Reduce_local(tmpbuf, recvbuf, count, datatype, op);
+        }
+
+        for (int stride_start = 1; stride_start < max_proc; stride_start *= RADIX)
+        {
+            int n_msgs = 0;
+            for (int step = 1; step < RADIX; step++)
+            {
+                int stride = stride_start * step;
+                if (stride < max_proc)
+                {
+                    int send_proc = (rank - stride + max_proc) % max_proc;
+                    int recv_proc = (rank + stride) % max_proc;
+                    MPI_Isend(recvbuf, count, datatype, send_proc, tag,
+                            comm, &(request[n_msgs++]));
+                    MPI_Irecv(tmpbuf + (step-1)*count*type_size, count, datatype, recv_proc, tag,
+                            comm, &(request[n_msgs++]));
+                }
+            }
+            MPI_Waitall(n_msgs, request, MPI_STATUSES_IGNORE);
+            for (int step = 1; step < RADIX; step++)
+            {
+                int stride = stride_start * step;
+                if (stride < max_proc)
+                    MPI_Reduce_local(tmpbuf+(step-1)*count*type_size, recvbuf, count,
+                            datatype, op);
+            }
+        }
+
+
+        if (rank < extra)
+        {
+            MPI_Send(recvbuf, count, datatype, max_proc + rank, tag, comm);
+        }
+    }
+
+    free(request);
+    free(tmpbuf);
+
+    return MPI_SUCCESS;
+}
+
+int MPI_Allreduce(const void* sendbuf,
+                        void* recvbuf,
+                        int count,
+                        MPI_Datatype datatype,
+                        MPI_Op op,
+                        MPI_Comm comm)
+{
+    if (count < 100)
+    {
+        return high_radix_allreduce(sendbuf, recvbuf, count, datatype, op, comm);
+    }
+    else // Only use high radix for small allreduces
+    {
+        return PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
+    }
+
+    return MPI_SUCCESS;
+}
+
 HYPRE_Int
 hypre_MPI_Allreduce( void              *sendbuf,
                      void              *recvbuf,
