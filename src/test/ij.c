@@ -3016,7 +3016,7 @@ main( hypre_int argc,
          hypre_printf("  -fs_eig_max_iters <val>          : Max. it. for eig calculation.\n");
          hypre_printf("  -fs_kap_tol <val>                : Kap. theshold (adaptive)\n");
          /* end FSAI options */
-         hypre_printf("  -gpu_mpi <0/1>                   : 0: MPI communicates using host memory. 1: MPI communication using device buffers.\n");
+         hypre_printf("  -gpu_mpi <0/1>                   : 0: MPI communicates using host memory. 1: MPI communicates using device buffers.\n");
          hypre_printf("                                     (default 0)\n");
          /* hypre AMG-DD options */
          hypre_printf("  -amgdd_start_level   <val>       : set AMG-DD start level = val\n");
