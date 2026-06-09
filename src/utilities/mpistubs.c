@@ -942,10 +942,8 @@ static int num_nodess[NUM_MPIL_COMMS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 static int ppns[NUM_MPIL_COMMS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 HYPRE_Int
-hypre_MPI_Init( hypre_int   *argc,
-                char      ***argv )
+hypre_MPIL_Setup( void )
 {
-   HYPRE_Int out = (HYPRE_Int) MPI_Init(argc, argv);
    int found = 0;   
    comms[found] = MPI_COMM_WORLD;
    
@@ -1026,11 +1024,21 @@ hypre_MPI_Init( hypre_int   *argc,
    MPI_Comm_free(&group_comm);
    MPI_Comm_free(&local_comm);
    
-   return out;
+   return 0;
 }
 
 HYPRE_Int
-hypre_MPI_Finalize( void )
+hypre_MPI_Init( hypre_int   *argc,
+                char      ***argv )
+{
+   HYPRE_Int out = (HYPRE_Int) MPI_Init(argc, argv);
+
+   hypre_MPIL_Setup();
+   
+   return out;
+}
+
+HYPRE_Int hypre_MPIL_Finish( void )
 {
    for (int i = 0; i < NUM_MPIL_COMMS; ++i)
    {
@@ -1040,6 +1048,12 @@ hypre_MPI_Finalize( void )
       if (leader_comms[i] != MPI_COMM_NULL) MPI_Comm_free(&(leader_comms[i]));
       leader_comms[i] = MPI_COMM_NULL;
    }
+}
+
+HYPRE_Int
+hypre_MPI_Finalize( void )
+{
+   hypre_MPIL_Finish();
    
    return (HYPRE_Int) MPI_Finalize();
 }
@@ -1743,7 +1757,7 @@ int numa_aware_allreduce(const void* sendbuf,
    }
    else
    {
-      // skip alternative comms for now, only use NUMA-aware on MPI_COMM_WORLD setup in hypre_MPI_Init
+      // skip alternative comms for now, only use NUMA-aware on MPI_COMM_WORLD setup in hypre_MPI_Init/hypre_MPIL_Setup
       return PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
       /*
       while (found + 1 < NUM_MPIL_COMMS)
