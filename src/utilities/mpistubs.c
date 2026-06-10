@@ -918,16 +918,34 @@ HYPRE_Int hypre_MPI_Info_free( hypre_MPI_Info *info )
 
 #else
 
+HYPRE_Int 
+hypre_MPIL_Setup( void )
+{
+   return 0;
+}
+
 HYPRE_Int
 hypre_MPI_Init( hypre_int   *argc,
                 char      ***argv )
 {
-   return (HYPRE_Int) MPI_Init(argc, argv);
+   int out = (HYPRE_Int) MPI_Init(argc, argv);
+   
+   hypre_MPIL_Setup();
+   
+   return out;
+}
+
+HYPRE_Int
+hypre_MPIL_Finish( void )
+{
+   return 0;
 }
 
 HYPRE_Int
 hypre_MPI_Finalize( void )
 {
+   hypre_MPIL_Finish();
+   
    return (HYPRE_Int) MPI_Finalize();
 }
 
