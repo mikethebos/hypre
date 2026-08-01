@@ -1051,10 +1051,6 @@ hypre_MPI_Init( hypre_int   *argc,
 
 HYPRE_Int hypre_MPIL_Finish( void )
 {
-   if (!is_mpil_setup)
-   {
-      return 0;
-   }
    for (int i = 0; i < NUM_MPIL_COMMS; ++i)
    {
       comms[i] = MPI_COMM_NULL;
