@@ -918,9 +918,18 @@ HYPRE_Int hypre_MPI_Info_free( hypre_MPI_Info *info )
 
 #else
 
+static int is_mpil_setup = 0;
+static int is_mpil_enabled = 1;
+
 HYPRE_Int 
 hypre_MPIL_Setup( void )
 {
+   if (is_mpil_setup)
+   {
+      return 0;
+   }
+   
+   is_mpil_setup = 1;
    return 0;
 }
 
@@ -938,6 +947,12 @@ hypre_MPI_Init( hypre_int   *argc,
 HYPRE_Int
 hypre_MPIL_Finish( void )
 {
+   if (!is_mpil_setup)
+   {
+      return 0;
+   }
+
+   is_mpil_setup = 0;
    return 0;
 }
 
@@ -947,6 +962,22 @@ hypre_MPI_Finalize( void )
    hypre_MPIL_Finish();
    
    return (HYPRE_Int) MPI_Finalize();
+}
+
+HYPRE_Int 
+hypre_MPIL_Enable( void )
+{
+   is_mpil_enabled = 1;
+   
+   return 0;
+}
+
+HYPRE_Int 
+hypre_MPIL_Disable( void )
+{
+   is_mpil_enabled = 0;
+   
+   return 0;
 }
 
 HYPRE_Int
@@ -1534,7 +1565,7 @@ int MPI_Allreduce(const void* sendbuf,
                         MPI_Op op,
                         MPI_Comm comm)
 {
-    if (count < 100)
+    if (is_mpil_enabled && count < 100)
     {
         return high_radix_allreduce(sendbuf, recvbuf, count, datatype, op, comm);
     }
