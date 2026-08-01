@@ -947,11 +947,6 @@ hypre_MPI_Init( hypre_int   *argc,
 HYPRE_Int
 hypre_MPIL_Finish( void )
 {
-   if (!is_mpil_setup)
-   {
-      return 0;
-   }
-
    is_mpil_setup = 0;
    return 0;
 }
