@@ -939,7 +939,47 @@ hypre_MPIL_Setup( void )
       return 0;
    }
    
-   int found = 0;   
+   int found = -1;
+   int i = -1;
+   while (i + 1 < NUM_MPIL_COMMS)
+   {
+      i++;
+      MPI_Comm i_comm = comms[i];
+      if (i_comm == MPI_COMM_NULL) break;
+      if (i_comm == MPI_COMM_WORLD)
+      {
+         found = i;
+         break;
+      }
+      int res = 0;
+      MPI_Comm_compare(MPI_COMM_WORLD, i_comm, &res);
+      if (res == MPI_IDENT)
+      {
+         found = i;
+         break;
+      }
+   }
+   
+   if (found >= 0)
+   {
+      is_mpil_setup = 1;
+      return 0;
+   }
+   
+   while (found + 1 < NUM_MPIL_COMMS)
+   {
+      found++;
+      if (comms[found] == MPI_COMM_NULL) break;
+   }
+   if (comms[found] != MPI_COMM_NULL)
+   {
+      comms[found] = MPI_COMM_NULL;
+      if (leader_group_comms[found] != MPI_COMM_NULL) MPI_Comm_free(&(leader_group_comms[found]));
+      leader_group_comms[found] = MPI_COMM_NULL;
+      if (leader_comms[found] != MPI_COMM_NULL) MPI_Comm_free(&(leader_comms[found]));
+      leader_comms[found] = MPI_COMM_NULL;
+   }
+   
    comms[found] = MPI_COMM_WORLD;
    
    int rank, num_procs;
@@ -1719,6 +1759,12 @@ int numa_aware_allreduce(const void* sendbuf,
       }
       if (comms[found] != MPI_COMM_NULL)
       {
+         int res = 0;
+         MPI_Comm_compare(MPI_COMM_WORLD, comms[found], &res);
+         if (comms[found] == MPI_COMM_WORLD || res == MPI_IDENT)
+         {
+             is_mpil_setup = 0;            
+         }
          comms[found] = MPI_COMM_NULL;
          if (leader_group_comms[found] != MPI_COMM_NULL) MPI_Comm_free(&(leader_group_comms[found]));
          leader_group_comms[found] = MPI_COMM_NULL;
