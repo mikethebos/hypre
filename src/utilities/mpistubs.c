@@ -933,6 +933,9 @@ hypre_MPI_CheckCommMatrix( hypre_MPI_Comm   comm,
 
 #else
 
+static int is_mpil_setup = 0;
+static int is_mpil_enabled = 1;
+
 // when updating NUM_MPIL_COMMS, update array initializations below
 #define NUM_MPIL_COMMS 16
 
@@ -946,6 +949,11 @@ static int ppns[NUM_MPIL_COMMS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 HYPRE_Int
 hypre_MPIL_Setup( void )
 {
+   if (is_mpil_setup)
+   {
+      return 0;
+   }
+   
    int found = 0;   
    comms[found] = MPI_COMM_WORLD;
    
@@ -1026,6 +1034,7 @@ hypre_MPIL_Setup( void )
    MPI_Comm_free(&group_comm);
    MPI_Comm_free(&local_comm);
    
+   is_mpil_setup = 1;
    return 0;
 }
 
@@ -1042,6 +1051,10 @@ hypre_MPI_Init( hypre_int   *argc,
 
 HYPRE_Int hypre_MPIL_Finish( void )
 {
+   if (!is_mpil_setup)
+   {
+      return 0;
+   }
    for (int i = 0; i < NUM_MPIL_COMMS; ++i)
    {
       comms[i] = MPI_COMM_NULL;
@@ -1050,6 +1063,8 @@ HYPRE_Int hypre_MPIL_Finish( void )
       if (leader_comms[i] != MPI_COMM_NULL) MPI_Comm_free(&(leader_comms[i]));
       leader_comms[i] = MPI_COMM_NULL;
    }
+   is_mpil_setup = 0;
+   return 0;
 }
 
 HYPRE_Int
@@ -1058,6 +1073,22 @@ hypre_MPI_Finalize( void )
    hypre_MPIL_Finish();
    
    return (HYPRE_Int) MPI_Finalize();
+}
+
+HYPRE_Int 
+hypre_MPIL_Enable( void )
+{
+   is_mpil_enabled = 1;
+   
+   return 0;
+}
+
+HYPRE_Int 
+hypre_MPIL_Disable( void )
+{
+   is_mpil_enabled = 0;
+   
+   return 0;
 }
 
 HYPRE_Int
@@ -1875,7 +1906,7 @@ int MPI_Allreduce(const void* sendbuf,
                         MPI_Op op,
                         MPI_Comm comm)
 {
-    if (count < 100)
+    if (is_mpil_enabled && count < 100)
     {
         return numa_aware_allreduce(sendbuf, recvbuf, count, datatype, op, comm);
     }
