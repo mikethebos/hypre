@@ -980,6 +980,8 @@ HYPRE_Int hypre_MPIL_Setup( void );
 HYPRE_Int hypre_MPI_Init( hypre_int *argc, char ***argv );
 HYPRE_Int hypre_MPIL_Finish( void );
 HYPRE_Int hypre_MPI_Finalize( void );
+HYPRE_Int hypre_MPIL_Enable( void );
+HYPRE_Int hypre_MPIL_Disable( void );
 HYPRE_Int hypre_MPI_Abort( hypre_MPI_Comm comm, HYPRE_Int errorcode );
 HYPRE_Real hypre_MPI_Wtime( void );
 HYPRE_Real hypre_MPI_Wtick( void );
