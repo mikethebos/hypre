@@ -1479,11 +1479,17 @@ int high_radix_allreduce(const void* sendbuf,
     MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &num_procs);
 
+#if defined(HYPRE_USING_GPU)
+    char *cpu_recvbuf = (char *)malloc(count * type_size);
+#else
+    char *cpu_recvbuf = recvbuf;
+#endif
+    
     int tag = TAG;
 
     // Send `sendbuf` into `recvbuf` (Sendrecv to work on CPU or GPU)
     MPI_Sendrecv(sendbuf, count, datatype, rank, tag, 
-            recvbuf, count, datatype, rank, tag, comm,
+            cpu_recvbuf, count, datatype, rank, tag, comm,
             MPI_STATUS_IGNORE);
 
     int pow_radix_num_procs = 1;
@@ -1501,8 +1507,8 @@ int high_radix_allreduce(const void* sendbuf,
     if (rank >= max_proc)
     {
         int proc = rank - max_proc;
-        MPI_Send(recvbuf, count, datatype, proc, tag, comm);
-        MPI_Recv(recvbuf, count, datatype, proc, tag, comm, 
+        MPI_Send(cpu_recvbuf, count, datatype, proc, tag, comm);
+        MPI_Recv(cpu_recvbuf, count, datatype, proc, tag, comm, 
                 MPI_STATUS_IGNORE);
     }
     else
@@ -1511,7 +1517,7 @@ int high_radix_allreduce(const void* sendbuf,
         {
             MPI_Recv(tmpbuf, count, datatype, max_proc + rank, tag,
                    comm, MPI_STATUS_IGNORE);
-            MPI_Reduce_local(tmpbuf, recvbuf, count, datatype, op);
+            MPI_Reduce_local(tmpbuf, cpu_recvbuf, count, datatype, op);
         }
 
         for (int stride_start = 1; stride_start < max_proc; stride_start *= RADIX)
@@ -1524,7 +1530,7 @@ int high_radix_allreduce(const void* sendbuf,
                 {
                     int send_proc = (rank - stride + max_proc) % max_proc;
                     int recv_proc = (rank + stride) % max_proc;
-                    MPI_Isend(recvbuf, count, datatype, send_proc, tag,
+                    MPI_Isend(cpu_recvbuf, count, datatype, send_proc, tag,
                             comm, &(request[n_msgs++]));
                     MPI_Irecv(tmpbuf + (step-1)*count*type_size, count, datatype, recv_proc, tag,
                             comm, &(request[n_msgs++]));
@@ -1535,7 +1541,7 @@ int high_radix_allreduce(const void* sendbuf,
             {
                 int stride = stride_start * step;
                 if (stride < max_proc)
-                    MPI_Reduce_local(tmpbuf+(step-1)*count*type_size, recvbuf, count,
+                    MPI_Reduce_local(tmpbuf+(step-1)*count*type_size, cpu_recvbuf, count,
                             datatype, op);
             }
         }
@@ -1543,12 +1549,20 @@ int high_radix_allreduce(const void* sendbuf,
 
         if (rank < extra)
         {
-            MPI_Send(recvbuf, count, datatype, max_proc + rank, tag, comm);
+            MPI_Send(cpu_recvbuf, count, datatype, max_proc + rank, tag, comm);
         }
     }
 
     free(request);
     free(tmpbuf);
+    
+#if defined(HYPRE_USING_GPU)
+    MPI_Sendrecv(cpu_recvbuf, count, datatype, rank, tag,
+                 recvbuf, count, datatype, rank, tag, comm,
+                 MPI_STATUS_IGNORE);
+                 
+    free(cpu_recvbuf);
+#endif
 
     return MPI_SUCCESS;
 }
