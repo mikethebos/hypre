@@ -1690,16 +1690,21 @@ int allreduce_dissemination_loc_core(
     int type_size;
     MPI_Type_size(datatype, &type_size);
     
-    char *cpu_sendbuf = (char *)malloc(count*type_size);
+#if defined(HYPRE_USING_GPU)
     char *cpu_recvbuf = (char *)malloc(count*type_size);
-
+#else
+    char *cpu_recvbuf = recvbuf;
+#endif
+    
     int rank, num_procs;
     MPI_Comm_rank(global_comm, &rank);
     MPI_Comm_size(global_comm, &num_procs);
     
+#if defined(HYPRE_USING_GPU)
     // to work on gpus and cpus
-    MPI_Sendrecv(sendbuf, count, datatype, rank, tag, cpu_sendbuf, count, datatype, rank, tag, global_comm, MPI_STATUS_IGNORE);
-
+    MPI_Sendrecv(sendbuf, count, datatype, rank, tag, cpu_recvbuf, count, datatype, rank, tag, global_comm, MPI_STATUS_IGNORE);
+#endif
+    
     int local_rank, ppn;
     MPI_Comm_rank(local_comm, &local_rank);
     MPI_Comm_size(local_comm, &ppn);
@@ -1708,8 +1713,13 @@ int allreduce_dissemination_loc_core(
     MPI_Comm_rank(group_comm, &rank_node);
     MPI_Comm_size(group_comm, &num_nodes);
 
-    PMPI_Allreduce(cpu_sendbuf, cpu_recvbuf, count, datatype,
+#if defined(HYPRE_USING_GPU)
+    PMPI_Allreduce(MPI_IN_PLACE, cpu_recvbuf, count, datatype,
             op, local_comm);
+#else
+    PMPI_Allreduce(sendbuf, cpu_recvbuf, count, datatype,
+            op, local_comm);
+#endif
 
     int pow_ppn_num_nodes = 1;
     int base = ppn + 1;
@@ -1772,12 +1782,13 @@ int allreduce_dissemination_loc_core(
 
     free((void*)tmpbuf);
     
+#if defined(HYPRE_USING_GPU)
     // to work on gpus and cpus
     MPI_Sendrecv(cpu_recvbuf, count, datatype, rank, tag, recvbuf, count, datatype, rank, tag, global_comm, MPI_STATUS_IGNORE);
     
-    free((void*)cpu_sendbuf);
     free((void*)cpu_recvbuf);
-
+#endif
+    
     return MPI_SUCCESS;
 }
 
