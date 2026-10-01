@@ -1051,8 +1051,8 @@ hypre_MPIL_Setup( void )
    num_nodess[found] = num_nodes;
    int rank_node = global_rank_to_node[rank];
 
-   // Convert to leader_comm (4 leaders per node)
-   int num_leaders = 4;
+   // Convert to leader_comm (2 leaders per node)
+   int num_leaders = 2;
    int procs_per_leader = ppn / num_leaders;
    int leader = local_rank / procs_per_leader;
    int leader_rank = local_rank % procs_per_leader;
@@ -1916,8 +1916,8 @@ int numa_aware_allreduce(const void* sendbuf,
       num_nodess[found] = num_nodes;
       int rank_node = global_rank_to_node[rank];
 
-      // Convert to leader_comm (4 leaders per node)
-      int num_leaders = 4;
+      // Convert to leader_comm (2 leaders per node)
+      int num_leaders = 2;
       int procs_per_leader = ppn / num_leaders;
       int leader = local_rank / procs_per_leader;
       int leader_rank = local_rank % procs_per_leader;
