@@ -1685,24 +1685,37 @@ int allreduce_dissemination_loc_core(
                         MPI_Comm global_comm, 
                         MPI_Comm group_comm,
                         MPI_Comm local_comm,
-                        int tag)
+                        int tag
+#if defined(HYPRE_USING_GPU)
+                        , int cpuBuffersPassedIn
+#endif
+                     )
 {
     int type_size;
     MPI_Type_size(datatype, &type_size);
     
+    char *cpu_recvbuf;
 #if defined(HYPRE_USING_GPU)
-    char *cpu_recvbuf = (char *)malloc(count*type_size);
-#else
-    char *cpu_recvbuf = recvbuf;
+    if (!cpuBuffersPassedIn)
+    {
+        cpu_recvbuf = (char *)malloc(count*type_size);
+    }
+    else
 #endif
+    {
+        cpu_recvbuf = recvbuf;
+    }
     
     int rank, num_procs;
     MPI_Comm_rank(global_comm, &rank);
     MPI_Comm_size(global_comm, &num_procs);
     
 #if defined(HYPRE_USING_GPU)
-    // to work on gpus and cpus
-    MPI_Sendrecv(sendbuf, count, datatype, rank, tag, cpu_recvbuf, count, datatype, rank, tag, global_comm, MPI_STATUS_IGNORE);
+    if (!cpuBuffersPassedIn)
+    {
+       // to work on gpus and cpus
+      MPI_Sendrecv(sendbuf, count, datatype, rank, tag, cpu_recvbuf, count, datatype, rank, tag, global_comm, MPI_STATUS_IGNORE);
+    }
 #endif
     
     int local_rank, ppn;
@@ -1714,12 +1727,17 @@ int allreduce_dissemination_loc_core(
     MPI_Comm_size(group_comm, &num_nodes);
 
 #if defined(HYPRE_USING_GPU)
-    PMPI_Allreduce(MPI_IN_PLACE, cpu_recvbuf, count, datatype,
-            op, local_comm);
-#else
-    PMPI_Allreduce(sendbuf, cpu_recvbuf, count, datatype,
-            op, local_comm);
+    if (!cpuBuffersPassedIn)
+    {
+      PMPI_Allreduce(MPI_IN_PLACE, cpu_recvbuf, count, datatype,
+               op, local_comm);
+    }
+    else
 #endif
+    {
+      PMPI_Allreduce(sendbuf, cpu_recvbuf, count, datatype,
+               op, local_comm);
+    }
 
     int pow_ppn_num_nodes = 1;
     int base = ppn + 1;
@@ -1783,10 +1801,13 @@ int allreduce_dissemination_loc_core(
     free((void*)tmpbuf);
     
 #if defined(HYPRE_USING_GPU)
-    // to work on gpus and cpus
-    MPI_Sendrecv(cpu_recvbuf, count, datatype, rank, tag, recvbuf, count, datatype, rank, tag, global_comm, MPI_STATUS_IGNORE);
-    
-    free((void*)cpu_recvbuf);
+    if (!cpuBuffersPassedIn)
+    {
+      // to work on gpus and cpus
+      MPI_Sendrecv(cpu_recvbuf, count, datatype, rank, tag, recvbuf, count, datatype, rank, tag, global_comm, MPI_STATUS_IGNORE);
+      
+      free((void*)cpu_recvbuf);
+    }
 #endif
     
     return MPI_SUCCESS;
@@ -1797,7 +1818,11 @@ int numa_aware_allreduce(const void* sendbuf,
                                int count,
                                MPI_Datatype datatype,
                                MPI_Op op,
-                               MPI_Comm comm)
+                               MPI_Comm comm
+#if defined(HYPRE_USING_GPU)
+                        , int cpuBuffersPassedIn
+#endif
+                  )
 {
    
    int found = -1;
@@ -1948,7 +1973,11 @@ int numa_aware_allreduce(const void* sendbuf,
       return allreduce_dissemination_loc_core(
                      sendbuf, recvbuf, count, datatype, op, 
                      comm, leader_group_comm, 
-                     leader_comm, 77);
+                     leader_comm, 77
+#if defined(HYPRE_USING_GPU)
+                     , cpuBuffersPassedIn
+#endif
+                  );
    }
 }
 
@@ -1957,11 +1986,19 @@ int MPI_Allreduce(const void* sendbuf,
                         int count,
                         MPI_Datatype datatype,
                         MPI_Op op,
-                        MPI_Comm comm)
+                        MPI_Comm comm
+#if defined(HYPRE_USING_GPU)
+                        , int cpuBuffersPassedIn
+#endif
+                  )
 {
     if (is_mpil_enabled && count < 100)
     {
-        return numa_aware_allreduce(sendbuf, recvbuf, count, datatype, op, comm);
+        return numa_aware_allreduce(sendbuf, recvbuf, count, datatype, op, comm
+#if defined(HYPRE_USING_GPU)
+                     , cpuBuffersPassedIn
+#endif
+                  );   
     }
     else // Only use numa aware for small allreduces
     {
@@ -1983,12 +2020,41 @@ hypre_MPI_Allreduce( void              *sendbuf,
    hypre_assert(count >= 0);
 
    HYPRE_Int result = MPI_Allreduce(sendbuf, recvbuf, (hypre_int)count,
-                                    datatype, op, comm);
+                                    datatype, op, comm
+#if defined(HYPRE_USING_GPU)
+                                    , 0
+#endif
+                                 );
 
    hypre_GpuProfilingPopRange();
 
    return result;
 }
+
+#if defined(HYPRE_USING_GPU)
+HYPRE_Int
+hypre_MPI_Allreduce_CPU( void              *sendbuf,
+                     void              *recvbuf,
+                     HYPRE_Int          count,
+                     hypre_MPI_Datatype datatype,
+                     hypre_MPI_Op       op,
+                     hypre_MPI_Comm     comm )
+{
+   hypre_GpuProfilingPushRange("MPI_Allreduce");
+   hypre_assert(count >= 0);
+
+   HYPRE_Int result = MPI_Allreduce(sendbuf, recvbuf, (hypre_int)count,
+                                    datatype, op, comm
+#if defined(HYPRE_USING_GPU)
+                                    , 1
+#endif
+                                 );
+
+   hypre_GpuProfilingPopRange();
+
+   return result;
+}
+#endif
 
 HYPRE_Int
 hypre_MPI_Reduce( void               *sendbuf,
