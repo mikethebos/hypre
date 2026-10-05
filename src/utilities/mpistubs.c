@@ -1564,7 +1564,7 @@ int high_radix_allreduce(const void* sendbuf,
 #if defined(HYPRE_USING_GPU)
     if (!cpuBuffersPassedIn)
     {
-      char *cpu_recvbuf = (char *)malloc(count * type_size);
+      cpu_recvbuf = (char *)malloc(count * type_size);
     }
     else 
 #endif
