@@ -1547,7 +1547,11 @@ int high_radix_allreduce(const void* sendbuf,
                         int count,
                         MPI_Datatype datatype,
                         MPI_Op op,
-                        MPI_Comm comm)
+                        MPI_Comm comm
+#if defined(HYPRE_USING_GPU)
+                        , int cpuBuffersPassedIn
+#endif
+                     )
 {
     int type_size;
     MPI_Type_size(datatype, &type_size);
@@ -1556,11 +1560,17 @@ int high_radix_allreduce(const void* sendbuf,
     MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &num_procs);
 
+    char *cpu_recvbuf;
 #if defined(HYPRE_USING_GPU)
-    char *cpu_recvbuf = (char *)malloc(count * type_size);
-#else
-    char *cpu_recvbuf = recvbuf;
+    if (!cpuBuffersPassedIn)
+    {
+      char *cpu_recvbuf = (char *)malloc(count * type_size);
+    }
+    else 
 #endif
+    {
+      cpu_recvbuf = recvbuf;
+    }
     
     int tag = TAG;
 
@@ -1634,11 +1644,14 @@ int high_radix_allreduce(const void* sendbuf,
     free(tmpbuf);
     
 #if defined(HYPRE_USING_GPU)
-    MPI_Sendrecv(cpu_recvbuf, count, datatype, rank, tag,
-                 recvbuf, count, datatype, rank, tag, comm,
-                 MPI_STATUS_IGNORE);
-                 
-    free(cpu_recvbuf);
+    if (!cpuBuffersPassedIn)
+    {
+      MPI_Sendrecv(cpu_recvbuf, count, datatype, rank, tag,
+                  recvbuf, count, datatype, rank, tag, comm,
+                  MPI_STATUS_IGNORE);
+                  
+      free(cpu_recvbuf);
+    }
 #endif
 
     return MPI_SUCCESS;
@@ -1649,11 +1662,19 @@ int MPI_Allreduce(const void* sendbuf,
                         int count,
                         MPI_Datatype datatype,
                         MPI_Op op,
-                        MPI_Comm comm)
+                        MPI_Comm comm
+#if defined(HYPRE_USING_GPU)
+                        , int cpuBuffersPassedIn
+#endif
+                  )
 {
     if (is_mpil_enabled && count < 100)
     {
-        return high_radix_allreduce(sendbuf, recvbuf, count, datatype, op, comm);
+        return high_radix_allreduce(sendbuf, recvbuf, count, datatype, op, comm
+#if defined(HYPRE_USING_GPU)
+                                    , cpuBuffersPassedIn
+#endif
+                                   );
     }
     else // Only use high radix for small allreduces
     {
@@ -1675,12 +1696,41 @@ hypre_MPI_Allreduce( void              *sendbuf,
    hypre_assert(count >= 0);
 
    HYPRE_Int result = MPI_Allreduce(sendbuf, recvbuf, (hypre_int)count,
-                                    datatype, op, comm);
+                                    datatype, op, comm
+#if defined(HYPRE_USING_GPU)
+                                    , 0
+#endif
+                                 );
 
    hypre_GpuProfilingPopRange();
 
    return result;
 }
+
+#if defined(HYPRE_USING_GPU)
+HYPRE_Int
+hypre_MPI_Allreduce_CPU( void              *sendbuf,
+                     void              *recvbuf,
+                     HYPRE_Int          count,
+                     hypre_MPI_Datatype datatype,
+                     hypre_MPI_Op       op,
+                     hypre_MPI_Comm     comm )
+{
+   hypre_GpuProfilingPushRange("MPI_Allreduce");
+   hypre_assert(count >= 0);
+
+   HYPRE_Int result = MPI_Allreduce(sendbuf, recvbuf, (hypre_int)count,
+                                    datatype, op, comm
+#if defined(HYPRE_USING_GPU)
+                                    , 1
+#endif
+                                 );
+
+   hypre_GpuProfilingPopRange();
+
+   return result;
+}
+#endif
 
 HYPRE_Int
 hypre_MPI_Reduce( void               *sendbuf,

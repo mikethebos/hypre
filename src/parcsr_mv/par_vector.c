@@ -617,8 +617,13 @@ hypre_ParVectorInnerProd( hypre_ParVector *x,
 #ifdef HYPRE_PROFILE
    hypre_profile_times[HYPRE_TIMER_ID_ALL_REDUCE] -= hypre_MPI_Wtime();
 #endif
+#if defined(HYPRE_USING_GPU)
+   hypre_MPI_Allreduce_CPU(&local_result, &result, 1, HYPRE_MPI_REAL,
+                       hypre_MPI_SUM, comm);
+#else
    hypre_MPI_Allreduce(&local_result, &result, 1, HYPRE_MPI_REAL,
                        hypre_MPI_SUM, comm);
+#endif
 #ifdef HYPRE_PROFILE
    hypre_profile_times[HYPRE_TIMER_ID_ALL_REDUCE] += hypre_MPI_Wtime();
 #endif
