@@ -1657,7 +1657,7 @@ int high_radix_allreduce(const void* sendbuf,
     return MPI_SUCCESS;
 }
 
-int MPI_Allreduce(const void* sendbuf,
+int my_MPI_Allreduce(const void* sendbuf,
                         void* recvbuf,
                         int count,
                         MPI_Datatype datatype,
@@ -1695,7 +1695,7 @@ hypre_MPI_Allreduce( void              *sendbuf,
    hypre_GpuProfilingPushRange("MPI_Allreduce");
    hypre_assert(count >= 0);
 
-   HYPRE_Int result = MPI_Allreduce(sendbuf, recvbuf, (hypre_int)count,
+   HYPRE_Int result = my_MPI_Allreduce(sendbuf, recvbuf, (hypre_int)count,
                                     datatype, op, comm
 #if defined(HYPRE_USING_GPU)
                                     , 0
@@ -1719,7 +1719,7 @@ hypre_MPI_Allreduce_CPU( void              *sendbuf,
    hypre_GpuProfilingPushRange("MPI_Allreduce");
    hypre_assert(count >= 0);
 
-   HYPRE_Int result = MPI_Allreduce(sendbuf, recvbuf, (hypre_int)count,
+   HYPRE_Int result = my_MPI_Allreduce(sendbuf, recvbuf, (hypre_int)count,
                                     datatype, op, comm
 #if defined(HYPRE_USING_GPU)
                                     , 1
