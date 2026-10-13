@@ -328,6 +328,15 @@ HYPRE_Int hypre_MPI_Waitany( HYPRE_Int count, hypre_MPI_Request *array_of_reques
                              HYPRE_Int *index, hypre_MPI_Status *status );
 HYPRE_Int hypre_MPI_Allreduce( void *sendbuf, void *recvbuf, HYPRE_Int count,
                                hypre_MPI_Datatype datatype, hypre_MPI_Op op, hypre_MPI_Comm comm );
+#if defined(HYPRE_USING_GPU)
+HYPRE_Int
+hypre_MPI_Allreduce_CPU( void              *sendbuf,
+                     void              *recvbuf,
+                     HYPRE_Int          count,
+                     hypre_MPI_Datatype datatype,
+                     hypre_MPI_Op       op,
+                     hypre_MPI_Comm     comm );
+#endif
 HYPRE_Int hypre_MPI_Reduce( void *sendbuf, void *recvbuf, HYPRE_Int count,
                             hypre_MPI_Datatype datatype, hypre_MPI_Op op, HYPRE_Int root, hypre_MPI_Comm comm );
 HYPRE_Int hypre_MPI_Scan( void *sendbuf, void *recvbuf, HYPRE_Int count,
